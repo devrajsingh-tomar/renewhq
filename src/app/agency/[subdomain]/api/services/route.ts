@@ -7,17 +7,28 @@ export async function GET(
   { params }: { params: Promise<{ subdomain: string }> }
 ) {
   const { subdomain } = await params;
-  const { error, status, agency } = await verifyTenantAccess(subdomain, ['AGENCY_ADMIN', 'STAFF', 'CLIENT']);
+  const { error, status, agency, session } = await verifyTenantAccess(subdomain, ['AGENCY_ADMIN', 'STAFF', 'CLIENT']);
   if (error) return NextResponse.json({ error }, { status });
 
   const { searchParams } = new URL(request.url);
   const clientId = searchParams.get('clientId');
   const paymentStatus = searchParams.get('paymentStatus');
 
+  let targetClientId = clientId;
+  if (session!.role === 'CLIENT') {
+    const clientRecord = await db.client.findFirst({
+      where: { userId: session!.userId, tenantId: agency!.id },
+    });
+    if (!clientRecord) {
+      return NextResponse.json({ services: [] });
+    }
+    targetClientId = clientRecord.id;
+  }
+
   const services = await db.service.findMany({
     where: {
       tenantId: agency!.id,
-      ...(clientId ? { clientId } : {}),
+      ...(targetClientId ? { clientId: targetClientId } : {}),
       ...(paymentStatus ? { paymentStatus } : {}),
     },
     include: {

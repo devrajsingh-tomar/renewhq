@@ -49,8 +49,12 @@ model Agency {
   payments      Payment[]
   invoices      Invoice[]
   reminders     Reminder[]
+  notifications Notification[]
   supportTickets SupportTicket[]
   activityLogs  ActivityLog[]
+
+  @@index([subdomain])
+  @@index([status])
 }
 
 // Subscriptions of agencies to RenewHQ SaaS plans
@@ -64,6 +68,9 @@ model Subscription {
   endDate   DateTime
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
+
+  @@index([agencyId])
+  @@index([status])
 }
 
 // Unified user table supporting RBAC
@@ -79,7 +86,12 @@ model User {
   updatedAt     DateTime @updatedAt
 
   client        Client?  // A client login user maps to a Client record (1-to-1)
+  notifications Notification[]
   activityLogs  ActivityLog[]
+
+  @@index([email])
+  @@index([tenantId])
+  @@index([role])
 }
 
 // Clients managed by agencies
@@ -95,7 +107,7 @@ model Client {
 
   // Login credentials for client dashboard (optional)
   userId        String?  @unique
-  user          User?    @relation(fields: [userId], references: [id])
+  user          User?    @relation(fields: [userId], references: [id], onDelete: SetNull)
 
   services      Service[]
   payments      Payment[]
@@ -103,6 +115,9 @@ model Client {
   supportTickets SupportTicket[]
   createdAt     DateTime @default(now())
   updatedAt     DateTime @updatedAt
+
+  @@index([tenantId])
+  @@index([email])
 }
 
 // Service Categories (Hosting, Domain, SSL, Workspace, etc.)
@@ -113,6 +128,8 @@ model ServiceCategory {
   agency    Agency    @relation(fields: [tenantId], references: [id], onDelete: Cascade)
   services  Service[]
   createdAt DateTime  @default(now())
+
+  @@index([tenantId])
 }
 
 // Service definitions with billing details
@@ -140,6 +157,12 @@ model Service {
   reminders          Reminder[]
   createdAt          DateTime         @default(now())
   updatedAt          DateTime         @updatedAt
+
+  @@index([tenantId])
+  @@index([clientId])
+  @@index([status])
+  @@index([paymentStatus])
+  @@index([expiryDate])
 }
 
 // Manual payments records
@@ -159,6 +182,11 @@ model Payment {
   verifiedByUserId String?
   createdAt        DateTime  @default(now())
   updatedAt        DateTime  @updatedAt
+
+  @@index([tenantId])
+  @@index([clientId])
+  @@index([serviceId])
+  @@index([status])
 }
 
 // PDF/GST invoices generated
@@ -179,6 +207,10 @@ model Invoice {
   pdfUrl        String?
   createdAt     DateTime @default(now())
   updatedAt     DateTime @updatedAt
+
+  @@index([tenantId])
+  @@index([clientId])
+  @@index([status])
 }
 
 // Automation tracking reminders
@@ -193,6 +225,28 @@ model Reminder {
   tenantId  String
   agency    Agency    @relation(fields: [tenantId], references: [id], onDelete: Cascade)
   createdAt DateTime  @default(now())
+
+  @@index([tenantId])
+  @@index([serviceId])
+  @@index([type])
+}
+
+// In-app notifications for users/clients
+model Notification {
+  id        String   @id @default(uuid())
+  title     String
+  message   String
+  type      String   @default("SYSTEM") // PAYMENT, RENEWAL, SYSTEM
+  isRead    Boolean  @default(false)
+  userId    String?
+  user      User?    @relation(fields: [userId], references: [id], onDelete: Cascade)
+  tenantId  String
+  agency    Agency   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  createdAt DateTime @default(now())
+
+  @@index([tenantId])
+  @@index([userId])
+  @@index([isRead])
 }
 
 // Support Tickets
@@ -209,6 +263,22 @@ model SupportTicket {
   assignedToUserId String?
   createdAt        DateTime  @default(now())
   updatedAt        DateTime  @updatedAt
+
+  @@index([tenantId])
+  @@index([clientId])
+  @@index([status])
+}
+
+// Password Reset Tokens
+model PasswordResetToken {
+  id        String   @id @default(uuid())
+  email     String
+  token     String   @unique
+  expiresAt DateTime
+  createdAt DateTime @default(now())
+
+  @@index([email])
+  @@index([token])
 }
 
 // Activity Logs
@@ -222,4 +292,8 @@ model ActivityLog {
   agency    Agency?  @relation(fields: [tenantId], references: [id], onDelete: Cascade)
   ipAddress String?
   createdAt DateTime @default(now())
+
+  @@index([tenantId])
+  @@index([userId])
+  @@index([action])
 }

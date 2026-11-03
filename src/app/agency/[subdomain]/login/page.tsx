@@ -3,6 +3,7 @@
 import React, { useState, useEffect } from 'react';
 import { useRouter, useParams } from 'next/navigation';
 import Link from 'next/link';
+import { Lock, Mail, ArrowRight, AlertCircle, Building2, UserCheck, Users, Sparkles } from 'lucide-react';
 
 export default function TenantLoginPage() {
   const router = useRouter();
@@ -16,25 +17,17 @@ export default function TenantLoginPage() {
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
 
-  // Fetch agency branding on mount
   useEffect(() => {
-    async function fetchBranding() {
-      try {
-        const res = await fetch(`/api/auth/me`);
-        const data = await res.json();
-        // Or fetch agency info directly. Let's fetch the current tenant info from the server.
-        const agencyRes = await fetch(`/api/auth/me`); // For now we can fetch config, or just query a public path.
-        // We will call a helper to get agency name
-      } catch (err) {
-        // use fallback
-      }
-    }
-    
-    // To make it robust and not block, we can parse the subdomain and capitalized it
     if (subdomain) {
-      setAgencyName(subdomain.charAt(0).toUpperCase() + subdomain.slice(1) + ' Portal');
+      setAgencyName(subdomain.charAt(0).toUpperCase() + subdomain.slice(1) + ' Studios');
     }
   }, [subdomain]);
+
+  const fillQuick = (demoEmail: string, demoPass: string) => {
+    setEmail(demoEmail);
+    setPassword(demoPass);
+    setError('');
+  };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -55,12 +48,16 @@ export default function TenantLoginPage() {
       }
 
       const role = data.user.role;
+      const host = window.location.host;
+      const isSubdomainHost = host.includes('.localhost') || host.includes('.renewhq.com');
+      const agencyPrefix = isSubdomainHost ? '' : `/agency/${subdomain}`;
+
       if (role === 'SUPER_ADMIN') {
         router.push('/super-admin');
       } else if (role === 'CLIENT') {
-        router.push(`/client/dashboard`);
+        router.push(`${agencyPrefix}/client/dashboard`);
       } else {
-        router.push(`/dashboard`);
+        router.push(`${agencyPrefix}/dashboard`);
       }
     } catch (err: any) {
       setError(err.message || 'Invalid credentials');
@@ -70,9 +67,9 @@ export default function TenantLoginPage() {
   };
 
   return (
-    <div className="min-h-screen flex items-center justify-center bg-slate-50 px-4 py-12 sm:px-6 lg:px-8">
-      <div className="max-w-md w-full space-y-8 bg-white p-8 rounded-2xl shadow-xl border border-slate-100">
-        <div>
+    <div className="min-h-screen flex items-center justify-center bg-slate-950 px-4 py-12 text-slate-100 selection:bg-indigo-500 selection:text-white">
+      <div className="max-w-md w-full space-y-8 bg-slate-900/90 border border-slate-800 p-8 rounded-2xl shadow-2xl backdrop-blur-xl">
+        <div className="text-center">
           {logoUrl ? (
             <img className="mx-auto h-12 w-auto" src={logoUrl} alt={agencyName} />
           ) : (
@@ -80,41 +77,51 @@ export default function TenantLoginPage() {
               {agencyName.charAt(0)}
             </div>
           )}
-          <h2 className="mt-6 text-center text-3xl font-extrabold text-slate-900">
+          <h2 className="mt-4 text-2xl font-bold tracking-tight text-white">
             Welcome to {agencyName}
           </h2>
-          <p className="mt-2 text-center text-sm text-slate-500">
-            Manage your renewals and billing operations
+          <p className="mt-1 text-xs text-slate-400">
+            Sign in to manage client renewals, services, and billing.
           </p>
         </div>
-        
+
         {error && (
-          <div className="bg-red-50 border-l-4 border-red-500 p-4 rounded-md">
-            <p className="text-sm text-red-700 font-medium">{error}</p>
+          <div className="p-4 bg-red-500/10 border border-red-500/20 rounded-xl flex items-start space-x-3 text-red-400 text-sm">
+            <AlertCircle className="h-5 w-5 flex-shrink-0 mt-0.5" />
+            <span>{error}</span>
           </div>
         )}
 
-        <form className="mt-8 space-y-6" onSubmit={handleSubmit}>
-          <div className="space-y-4 rounded-md shadow-sm">
-            <div>
-              <label htmlFor="email-address" className="text-xs font-semibold text-slate-600 uppercase">
-                Email Address
-              </label>
+        <form className="space-y-5" onSubmit={handleSubmit}>
+          <div>
+            <label htmlFor="email" className="block text-xs font-semibold uppercase tracking-wider text-slate-400 mb-1.5">
+              Email Address
+            </label>
+            <div className="relative">
               <input
-                id="email-address"
+                id="email"
                 name="email"
                 type="email"
                 required
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
-                className="mt-1 appearance-none relative block w-full px-3 py-3 border border-slate-200 placeholder-slate-400 text-slate-900 rounded-xl focus:outline-none focus:ring-2 focus:ring-indigo-600 focus:border-transparent transition-all sm:text-sm"
-                placeholder="you@company.com"
+                placeholder="pixeladmin@pixelcraft.com"
+                className="w-full px-4 py-3 bg-slate-800 border border-slate-700 rounded-xl text-white placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent text-sm transition-all"
               />
+              <Mail className="absolute right-3.5 top-3.5 h-4 w-4 text-slate-500" />
             </div>
-            <div>
-              <label htmlFor="password" className="text-xs font-semibold text-slate-600 uppercase">
+          </div>
+
+          <div>
+            <div className="flex items-center justify-between mb-1.5">
+              <label htmlFor="password" className="block text-xs font-semibold uppercase tracking-wider text-slate-400">
                 Password
               </label>
+              <Link href="/forgot-password" className="text-xs text-indigo-400 hover:text-indigo-300 font-medium transition-colors">
+                Forgot password?
+              </Link>
+            </div>
+            <div className="relative">
               <input
                 id="password"
                 name="password"
@@ -122,35 +129,82 @@ export default function TenantLoginPage() {
                 required
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
-                className="mt-1 appearance-none relative block w-full px-3 py-3 border border-slate-200 placeholder-slate-400 text-slate-900 rounded-xl focus:outline-none focus:ring-2 focus:ring-indigo-600 focus:border-transparent transition-all sm:text-sm"
                 placeholder="••••••••"
+                className="w-full px-4 py-3 bg-slate-800 border border-slate-700 rounded-xl text-white placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent text-sm transition-all"
               />
+              <Lock className="absolute right-3.5 top-3.5 h-4 w-4 text-slate-500" />
             </div>
           </div>
 
-          <div>
+          <button
+            type="submit"
+            disabled={loading}
+            className="w-full py-3.5 px-4 bg-indigo-600 hover:bg-indigo-700 text-white font-bold rounded-xl text-sm transition-all shadow-lg shadow-indigo-600/30 disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center space-x-2"
+          >
+            {loading ? (
+              <div className="animate-spin rounded-full h-4 w-4 border-2 border-white border-t-transparent" />
+            ) : (
+              <>
+                <span>Sign In to Agency</span>
+                <ArrowRight className="h-4 w-4" />
+              </>
+            )}
+          </button>
+        </form>
+
+        {/* Quick Demo Switcher */}
+        <div className="pt-6 border-t border-slate-800 space-y-3">
+          <div className="flex items-center justify-between">
+            <span className="text-xs font-bold uppercase tracking-wider text-slate-400 flex items-center space-x-1.5">
+              <Sparkles className="h-3.5 w-3.5 text-indigo-400" />
+              <span>Demo Accounts</span>
+            </span>
+            <span className="text-[10px] text-slate-500">Click to fill</span>
+          </div>
+
+          <div className="grid grid-cols-3 gap-2">
             <button
-              type="submit"
-              disabled={loading}
-              className="group relative w-full flex justify-center py-3 px-4 border border-transparent text-sm font-bold rounded-xl text-white bg-indigo-600 hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 transition-all shadow-lg shadow-indigo-600/25 disabled:opacity-50 disabled:cursor-not-allowed"
+              type="button"
+              onClick={() => fillQuick('pixeladmin@pixelcraft.com', 'pixel123')}
+              className="p-2 rounded-xl bg-slate-800/60 border border-slate-700/60 hover:bg-slate-800 hover:border-indigo-500 text-left transition-all group"
             >
-              {loading ? (
-                <svg className="animate-spin -ml-1 mr-3 h-5 w-5 text-white" fill="none" viewBox="0 0 24 24">
-                  <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
-                  <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z" />
-                </svg>
-              ) : 'Sign In'}
+              <div className="flex items-center space-x-1 text-xs font-bold text-white mb-0.5">
+                <Building2 className="h-3 w-3 text-indigo-400" />
+                <span>Admin</span>
+              </div>
+              <span className="text-[10px] text-slate-400 block truncate">pixeladmin@</span>
+            </button>
+
+            <button
+              type="button"
+              onClick={() => fillQuick('staff@pixelcraft.com', 'staff123')}
+              className="p-2 rounded-xl bg-slate-800/60 border border-slate-700/60 hover:bg-slate-800 hover:border-emerald-500 text-left transition-all group"
+            >
+              <div className="flex items-center space-x-1 text-xs font-bold text-white mb-0.5">
+                <Users className="h-3 w-3 text-emerald-400" />
+                <span>Staff</span>
+              </div>
+              <span className="text-[10px] text-slate-400 block truncate">staff@</span>
+            </button>
+
+            <button
+              type="button"
+              onClick={() => fillQuick('client1@acmax.com', 'client123')}
+              className="p-2 rounded-xl bg-slate-800/60 border border-slate-700/60 hover:bg-slate-800 hover:border-amber-500 text-left transition-all group"
+            >
+              <div className="flex items-center space-x-1 text-xs font-bold text-white mb-0.5">
+                <UserCheck className="h-3 w-3 text-amber-400" />
+                <span>Client</span>
+              </div>
+              <span className="text-[10px] text-slate-400 block truncate">client1@</span>
             </button>
           </div>
-        </form>
-        
-        <div className="text-center mt-4">
-          <p className="text-xs text-slate-400">
-            For demo: Agency Admin: <code className="bg-slate-100 px-1 py-0.5 rounded text-indigo-600 font-semibold">pixeladmin@pixelcraft.com</code> / password <code className="bg-slate-100 px-1 py-0.5 rounded text-indigo-600 font-semibold">pixel123</code>
-          </p>
-          <p className="text-xs text-slate-400 mt-1">
-            Client Portal: <code className="bg-slate-100 px-1 py-0.5 rounded text-indigo-600 font-semibold">client1@acmax.com</code> / password <code className="bg-slate-100 px-1 py-0.5 rounded text-indigo-600 font-semibold">client123</code>
-          </p>
+        </div>
+
+        <div className="text-center pt-2">
+          <Link href="/" className="text-xs text-slate-500 hover:text-slate-300 transition-colors">
+            ← Back to RenewHQ Home
+          </Link>
         </div>
       </div>
     </div>

@@ -8,9 +8,29 @@ export async function GET(
   { params }: { params: Promise<{ subdomain: string }> }
 ) {
   const { subdomain } = await params;
-  const { error, status, agency } = await verifyTenantAccess(subdomain, ['AGENCY_ADMIN', 'STAFF']);
+  const { error, status, agency, session } = await verifyTenantAccess(subdomain, ['AGENCY_ADMIN', 'STAFF', 'CLIENT']);
   if (error) {
     return NextResponse.json({ error }, { status });
+  }
+
+  // If role is CLIENT, strictly return only their own profile
+  if (session!.role === 'CLIENT') {
+    const client = await db.client.findFirst({
+      where: {
+        tenantId: agency!.id,
+        userId: session!.userId,
+      },
+      include: {
+        services: true,
+        user: {
+          select: {
+            email: true,
+          },
+        },
+      },
+    });
+
+    return NextResponse.json({ clients: client ? [client] : [] });
   }
 
   const { searchParams } = new URL(request.url);

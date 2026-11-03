@@ -60,10 +60,16 @@ export default function RootLandingPage() {
             Pricing
           </Link>
           <Link 
-            href="http://pixelcraft.localhost:3000/login" 
+            href="/login" 
             className="text-sm font-semibold text-slate-300 hover:text-white px-4 py-2 border border-slate-700 rounded-xl hover:bg-slate-800 transition-all"
           >
-            Access Demo Agency
+            Sign In
+          </Link>
+          <Link 
+            href="/agency/pixelcraft/login" 
+            className="text-sm font-semibold text-indigo-400 hover:text-indigo-300 px-4 py-2 border border-indigo-500/30 rounded-xl hover:bg-indigo-500/10 transition-all"
+          >
+            Demo Agency
           </Link>
           <Link 
             href="#register" 
@@ -282,9 +288,15 @@ export default function RootLandingPage() {
       </section>
 
       {/* Footer */}
-      <footer className="bg-slate-950 py-12 border-t border-slate-800 text-center text-slate-500 text-xs">
+      <footer className="bg-slate-950 py-12 border-t border-slate-800 text-center text-slate-500 text-xs space-y-4">
+        <div className="flex flex-wrap justify-center gap-6 text-slate-400 font-semibold">
+          <Link href="/login" className="hover:text-white transition-colors">Sign In</Link>
+          <Link href="/agency/pixelcraft/login" className="hover:text-white transition-colors">Demo Agency Portal</Link>
+          <Link href="/super-admin" className="hover:text-white transition-colors">Super Admin Portal</Link>
+          <Link href="/forgot-password" className="hover:text-white transition-colors">Forgot Password</Link>
+        </div>
         <p>© 2026 RenewHQ. All rights reserved.</p>
-        <p className="mt-2 text-slate-600">Built for agencies to automate subscription renewal cycles.</p>
+        <p className="text-slate-600">Built for agencies to automate subscription renewal cycles.</p>
       </footer>
     </div>
   );
