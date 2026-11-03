@@ -28,6 +28,14 @@ export function proxy(request: NextRequest) {
     subdomain = cleanHost.replace('.localhost', '');
   } else if (cleanHost.endsWith('.renewhq.com')) {
     subdomain = cleanHost.replace('.renewhq.com', '');
+  } else if (cleanHost.endsWith('.vercel.app')) {
+    // Vercel deployment domains (e.g. renewhq-tan.vercel.app)
+    const parts = cleanHost.split('.');
+    if (parts.length > 3) {
+      subdomain = parts[0];
+    } else {
+      subdomain = '';
+    }
   } else if (
     cleanHost !== 'localhost' &&
     cleanHost !== 'renewhq.com' &&
