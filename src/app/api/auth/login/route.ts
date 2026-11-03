@@ -35,10 +35,18 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // If user is suspended/blocked
-    if (user.agency && user.agency.status === 'BLOCKED') {
+    // If user account is suspended/blocked
+    if (user.status === 'SUSPENDED' || user.status === 'BLOCKED') {
       return NextResponse.json(
-        { error: 'Your agency has been blocked. Please contact platform support.' },
+        { error: 'Your account has been suspended. Please contact platform support.' },
+        { status: 403 }
+      );
+    }
+
+    // If user's agency is suspended/blocked
+    if (user.agency && (user.agency.status === 'BLOCKED' || user.agency.status === 'SUSPENDED')) {
+      return NextResponse.json(
+        { error: 'Your agency has been suspended. Please contact platform support.' },
         { status: 403 }
       );
     }
@@ -75,14 +83,13 @@ export async function POST(request: NextRequest) {
       },
     });
 
-    // Share cookie across subdomains if possible (e.g. .localhost or .renewhq.com)
+    // Share cookie across subdomains for production custom domain (e.g. .renewhq.com)
+    // Note: Never set domain to '.localhost' as Chromium and RFC 6265 reject it
     const host = request.headers.get('host') || '';
     const cleanHost = host.split(':')[0];
     
     let cookieDomain = '';
-    if (cleanHost.endsWith('.localhost')) {
-      cookieDomain = '.localhost';
-    } else if (cleanHost.endsWith('.renewhq.com')) {
+    if (cleanHost.endsWith('.renewhq.com')) {
       cookieDomain = '.renewhq.com';
     }
 

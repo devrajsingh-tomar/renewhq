@@ -16,6 +16,7 @@ export async function GET(request: NextRequest) {
         name: true,
         email: true,
         role: true,
+        status: true,
         tenantId: true,
         agency: {
           select: {
@@ -40,8 +41,12 @@ export async function GET(request: NextRequest) {
       return NextResponse.json({ authenticated: false }, { status: 401 });
     }
 
-    if (user.agency && user.agency.status === 'BLOCKED') {
-      return NextResponse.json({ error: 'Blocked' }, { status: 403 });
+    if (user.status === 'SUSPENDED' || user.status === 'BLOCKED') {
+      return NextResponse.json({ error: 'Account suspended' }, { status: 403 });
+    }
+
+    if (user.agency && (user.agency.status === 'BLOCKED' || user.agency.status === 'SUSPENDED')) {
+      return NextResponse.json({ error: 'Agency suspended' }, { status: 403 });
     }
 
     return NextResponse.json({

@@ -80,6 +80,7 @@ model User {
   email         String   @unique
   password      String
   role          String   // SUPER_ADMIN, AGENCY_ADMIN, STAFF, CLIENT
+  status        String   @default("ACTIVE") // ACTIVE, SUSPENDED, BLOCKED
   tenantId      String?  // NULL for SUPER_ADMIN
   agency        Agency?  @relation(fields: [tenantId], references: [id], onDelete: Cascade)
   createdAt     DateTime @default(now())
@@ -92,6 +93,7 @@ model User {
   @@index([email])
   @@index([tenantId])
   @@index([role])
+  @@index([status])
 }
 
 // Clients managed by agencies

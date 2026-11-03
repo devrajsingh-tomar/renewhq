@@ -90,50 +90,51 @@ export default function AgencyDashboard() {
           setAgencyLogoUrl(sessionData.user.agency.logoUrl || '');
         }
 
-        // 2. Fetch metrics
-        const metricsRes = await fetch(`${apiBase}/dashboard`);
-        if (metricsRes.ok) {
-          const metricsData = await metricsRes.json();
+        // 2. Fetch all resources in parallel
+        const promises: Promise<Response>[] = [
+          fetch(`${apiBase}/dashboard`),
+          fetch(`${apiBase}/clients`),
+          fetch(`${apiBase}/services`),
+          fetch(`${apiBase}/payments`),
+          fetch(`${apiBase}/invoices`),
+        ];
+
+        if (sessionData.user.role === 'AGENCY_ADMIN') {
+          promises.push(fetch(`${apiBase}/staff`));
+        }
+
+        const [mRes, cRes, sRes, pRes, iRes, stRes] = await Promise.all(promises);
+
+        if (mRes && mRes.ok) {
+          const metricsData = await mRes.json();
           setMetrics(metricsData.metrics || {});
           setCharts(metricsData.charts || { renewalStats: [], revenueTrends: [] });
           setActivityLogs(metricsData.recentLogs || []);
         }
 
-        // 3. Fetch clients
-        const clientsRes = await fetch(`${apiBase}/clients`);
-        if (clientsRes.ok) {
-          const clientsData = await clientsRes.json();
+        if (cRes && cRes.ok) {
+          const clientsData = await cRes.json();
           setClients(clientsData.clients || []);
         }
 
-        // 4. Fetch services
-        const servicesRes = await fetch(`${apiBase}/services`);
-        if (servicesRes.ok) {
-          const servicesData = await servicesRes.json();
+        if (sRes && sRes.ok) {
+          const servicesData = await sRes.json();
           setServices(servicesData.services || []);
         }
 
-        // 5. Fetch payments
-        const paymentsRes = await fetch(`${apiBase}/payments`);
-        if (paymentsRes.ok) {
-          const paymentsData = await paymentsRes.json();
+        if (pRes && pRes.ok) {
+          const paymentsData = await pRes.json();
           setPayments(paymentsData.payments || []);
         }
 
-        // 6. Fetch invoices
-        const invoicesRes = await fetch(`${apiBase}/invoices`);
-        if (invoicesRes.ok) {
-          const invoicesData = await invoicesRes.json();
+        if (iRes && iRes.ok) {
+          const invoicesData = await iRes.json();
           setInvoices(invoicesData.invoices || []);
         }
 
-        // 7. Fetch staff (for AGENCY_ADMIN)
-        if (sessionData.user.role === 'AGENCY_ADMIN') {
-          const staffRes = await fetch(`${apiBase}/staff`);
-          if (staffRes.ok) {
-            const staffData = await staffRes.json();
-            setStaffList(staffData.staff || []);
-          }
+        if (stRes && stRes.ok) {
+          const staffData = await stRes.json();
+          setStaffList(staffData.staff || []);
         }
 
         // Default categories

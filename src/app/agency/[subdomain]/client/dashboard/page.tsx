@@ -56,24 +56,25 @@ export default function ClientDashboardPage() {
           const clientRecord = clientData.clients[0];
           setClient(clientRecord);
 
-          // Get services
-          const servicesRes = await fetch(`${apiBase}/services?clientId=${clientRecord.id}`);
-          if (servicesRes.ok) {
-            const servicesData = await servicesRes.json();
+          // Get services, invoices, payments in parallel
+          const [sRes, iRes, pRes] = await Promise.all([
+            fetch(`${apiBase}/services?clientId=${clientRecord.id}`),
+            fetch(`${apiBase}/invoices?clientId=${clientRecord.id}`),
+            fetch(`${apiBase}/payments?clientId=${clientRecord.id}`),
+          ]);
+
+          if (sRes && sRes.ok) {
+            const servicesData = await sRes.json();
             setServices(servicesData.services || []);
           }
 
-          // Get invoices
-          const invoicesRes = await fetch(`${apiBase}/invoices?clientId=${clientRecord.id}`);
-          if (invoicesRes.ok) {
-            const invoicesData = await invoicesRes.json();
+          if (iRes && iRes.ok) {
+            const invoicesData = await iRes.json();
             setInvoices(invoicesData.invoices || []);
           }
 
-          // Get payments
-          const paymentsRes = await fetch(`${apiBase}/payments?clientId=${clientRecord.id}`);
-          if (paymentsRes.ok) {
-            const paymentsData = await paymentsRes.json();
+          if (pRes && pRes.ok) {
+            const paymentsData = await pRes.json();
             setPayments(paymentsData.payments || []);
           }
         }

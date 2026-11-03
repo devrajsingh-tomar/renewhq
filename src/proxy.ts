@@ -1,7 +1,15 @@
 import { NextResponse } from 'next/server';
 import type { NextRequest } from 'next/server';
 
-function getSubdomainFromCookie(token: string | undefined): string | null {
+interface SessionData {
+  userId: string;
+  email: string;
+  role: string;
+  tenantId: string | null;
+  subdomain: string | null;
+}
+
+function getSessionFromCookie(token: string | undefined): SessionData | null {
   if (!token) return null;
   try {
     const parts = token.split('.');
@@ -15,7 +23,17 @@ function getSubdomainFromCookie(token: string | undefined): string | null {
         .join('')
     );
     const parsed = JSON.parse(jsonPayload);
-    return parsed.subdomain || null;
+    // Expiration check
+    if (parsed.exp && parsed.exp * 1000 < Date.now()) {
+      return null;
+    }
+    return {
+      userId: parsed.userId,
+      email: parsed.email,
+      role: parsed.role,
+      tenantId: parsed.tenantId || null,
+      subdomain: parsed.subdomain || null,
+    };
   } catch {
     return null;
   }
@@ -33,7 +51,7 @@ export function proxy(request: NextRequest) {
   const referer = request.headers.get('referer');
   const { pathname } = url;
 
-  // 1. Skip static files, next assets, media extensions
+  // 1. Skip static assets, internal next endpoints, uploads, public files
   if (
     pathname.startsWith('/_next') ||
     pathname.startsWith('/uploads') ||
@@ -42,7 +60,7 @@ export function proxy(request: NextRequest) {
     return NextResponse.next();
   }
 
-  // 2. Allow global API routes
+  // 2. Allow global API endpoints (auth, cron, super-admin)
   if (
     pathname.startsWith('/api/auth') ||
     pathname.startsWith('/api/cron') ||
@@ -51,58 +69,123 @@ export function proxy(request: NextRequest) {
     return NextResponse.next();
   }
 
-  // 3. Detect Host Subdomain (e.g. pixelcraft.localhost:3000 or pixelcraft.renewhq.com)
-  let subdomain = '';
+  // 3. Extract Session from cookie
+  const sessionToken = request.cookies.get('renewhq_session')?.value;
+  const session = getSessionFromCookie(sessionToken);
+
+  // 4. Detect Subdomain from Host
+  let hostSubdomain = '';
   const cleanHost = host.split(':')[0]; // remove port
 
   if (cleanHost.endsWith('.localhost')) {
-    subdomain = cleanHost.replace('.localhost', '');
+    hostSubdomain = cleanHost.replace('.localhost', '');
   } else if (cleanHost.endsWith('.renewhq.com')) {
-    subdomain = cleanHost.replace('.renewhq.com', '');
+    hostSubdomain = cleanHost.replace('.renewhq.com', '');
   } else if (cleanHost.endsWith('.vercel.app')) {
     const parts = cleanHost.split('.');
     if (parts.length > 3) {
-      subdomain = parts[0];
-    } else {
-      subdomain = '';
+      hostSubdomain = parts[0];
     }
   } else if (
     cleanHost !== 'localhost' &&
+    cleanHost !== '127.0.0.1' &&
     cleanHost !== 'renewhq.com' &&
     cleanHost !== 'www.renewhq.com'
   ) {
-    subdomain = `custom-${cleanHost}`;
+    hostSubdomain = `custom-${cleanHost}`;
   }
 
-  // If host subdomain exists (e.g. pixelcraft.localhost:3000)
-  if (subdomain && subdomain !== 'www') {
+  // Determine effective subdomain context
+  const refererSubdomain = getSubdomainFromReferer(referer);
+  const pathAgencyMatch = pathname.match(/^\/agency\/([a-zA-Z0-9_-]+)/);
+  const pathSubdomain = pathAgencyMatch ? pathAgencyMatch[1] : null;
+  const effectiveSubdomain =
+    hostSubdomain || pathSubdomain || session?.subdomain || refererSubdomain || 'pixelcraft';
+
+  // 5. PROTECTED ROUTE CHECKS & DIRECT URL ACCESS PROTECTION
+  const isDashboardRoute =
+    pathname === '/dashboard' ||
+    pathname === '/client/dashboard' ||
+    pathname.startsWith('/agency/') && pathname.includes('/dashboard');
+
+  if (isDashboardRoute) {
+    // If not authenticated, redirect to login
+    if (!session) {
+      const loginTarget = pathSubdomain
+        ? `/agency/${pathSubdomain}/login`
+        : hostSubdomain
+        ? `/login`
+        : `/login`;
+      return NextResponse.redirect(new URL(loginTarget, request.url));
+    }
+
+    // Role-based redirect enforcement:
+    const isClientDashboard =
+      pathname === '/client/dashboard' || pathname.includes('/client/dashboard');
+
+    if (isClientDashboard && session.role !== 'CLIENT') {
+      // Non-clients (admins, staff) should not be on client portal -> redirect to agency dashboard
+      const target = hostSubdomain
+        ? `/dashboard`
+        : `/agency/${session.subdomain || effectiveSubdomain}/dashboard`;
+      return NextResponse.redirect(new URL(target, request.url));
+    }
+
+    if (!isClientDashboard && session.role === 'CLIENT') {
+      // Clients should not be on agency admin dashboard -> redirect to client portal
+      const target = hostSubdomain
+        ? `/client/dashboard`
+        : `/agency/${session.subdomain || effectiveSubdomain}/client/dashboard`;
+      return NextResponse.redirect(new URL(target, request.url));
+    }
+
+    if (session.role === 'SUPER_ADMIN' && pathname !== '/super-admin') {
+      return NextResponse.redirect(new URL('/super-admin', request.url));
+    }
+  }
+
+  // 6. LOGIN PAGE ACCESS WHEN ALREADY AUTHENTICATED
+  const isLoginPage =
+    pathname === '/login' ||
+    (pathname.startsWith('/agency/') && pathname.endsWith('/login'));
+
+  if (isLoginPage && session) {
+    if (session.role === 'SUPER_ADMIN') {
+      return NextResponse.redirect(new URL('/super-admin', request.url));
+    } else if (session.role === 'CLIENT') {
+      const target = hostSubdomain
+        ? `/client/dashboard`
+        : `/agency/${session.subdomain || effectiveSubdomain}/client/dashboard`;
+      return NextResponse.redirect(new URL(target, request.url));
+    } else {
+      const target = hostSubdomain
+        ? `/dashboard`
+        : `/agency/${session.subdomain || effectiveSubdomain}/dashboard`;
+      return NextResponse.redirect(new URL(target, request.url));
+    }
+  }
+
+  // 7. SUBDOMAIN HOST REWRITE (e.g. pixelcraft.localhost:3000)
+  if (hostSubdomain && hostSubdomain !== 'www') {
     if (!pathname.startsWith('/agency/')) {
-      url.pathname = `/agency/${subdomain}${pathname}`;
+      url.pathname = `/agency/${hostSubdomain}${pathname}`;
       return NextResponse.rewrite(url);
     }
     return NextResponse.next();
   }
 
-  // 4. Fallback Handling for Path-Based / Apex Deployments (e.g. renewhq-tan.vercel.app or localhost:3000)
-  // Check cookie or referer for agency subdomain context
-  const sessionToken = request.cookies.get('renewhq_session')?.value;
-  const sessionSubdomain = getSubdomainFromCookie(sessionToken);
-  const refererSubdomain = getSubdomainFromReferer(referer);
-  const effectiveSubdomain = sessionSubdomain || refererSubdomain || 'pixelcraft';
-
-  // Handle generic /dashboard navigation
+  // 8. APEX / PATH-BASED FALLBACK REWRITING (e.g. localhost:3000 or renewhq-tan.vercel.app)
   if (pathname === '/dashboard') {
     url.pathname = `/agency/${effectiveSubdomain}/dashboard`;
     return NextResponse.rewrite(url);
   }
 
-  // Handle generic /client/dashboard navigation
   if (pathname === '/client/dashboard') {
     url.pathname = `/agency/${effectiveSubdomain}/client/dashboard`;
     return NextResponse.rewrite(url);
   }
 
-  // Handle relative API calls: /api/(clients|services|payments|invoices|dashboard|notifications|staff)
+  // Tenant API route rewriting for relative client calls
   const tenantApiPrefixes = [
     '/api/clients',
     '/api/services',

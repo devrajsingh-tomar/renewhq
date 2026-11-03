@@ -7,9 +7,7 @@ export async function POST(request: NextRequest) {
   const cleanHost = host.split(':')[0];
   
   let cookieDomain = '';
-  if (cleanHost.endsWith('.localhost')) {
-    cookieDomain = '.localhost';
-  } else if (cleanHost.endsWith('.renewhq.com')) {
+  if (cleanHost.endsWith('.renewhq.com')) {
     cookieDomain = '.renewhq.com';
   }
 
