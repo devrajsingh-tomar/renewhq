@@ -1,0 +1,225 @@
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+// Global Plans for Agencies
+model Plan {
+  id            String   @id @default(uuid())
+  name          String   // Free, Starter, Professional, Enterprise
+  clientLimit   Int
+  storageLimit  Int      // in MB
+  reminderLimit Int      // per month
+  staffLimit    Int
+  monthlyPrice  Float
+  yearlyPrice   Float
+  features      String   // JSON string representing featured items
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+  agencies      Agency[]
+}
+
+// Agency / Tenant record
+model Agency {
+  id            String   @id @default(uuid())
+  name          String
+  subdomain     String   @unique
+  logoUrl       String?
+  primaryColor  String   @default("#4F46E5") // default Indigo
+  customDomain  String?  @unique
+  status        String   @default("ACTIVE") // PENDING, ACTIVE, BLOCKED
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  planId        String
+  plan          Plan     @relation(fields: [planId], references: [id])
+
+  // Subscriptions history for agency paying the platform
+  subscriptions Subscription[]
+
+  // Tenant-isolated records
+  users         User[]
+  clients       Client[]
+  services      Service[]
+  categories    ServiceCategory[]
+  payments      Payment[]
+  invoices      Invoice[]
+  reminders     Reminder[]
+  supportTickets SupportTicket[]
+  activityLogs  ActivityLog[]
+}
+
+// Subscriptions of agencies to RenewHQ SaaS plans
+model Subscription {
+  id        String   @id @default(uuid())
+  agencyId  String
+  agency    Agency   @relation(fields: [agencyId], references: [id], onDelete: Cascade)
+  planId    String
+  status    String   // ACTIVE, TRIAL, EXPIRED, CANCELLED
+  startDate DateTime
+  endDate   DateTime
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+// Unified user table supporting RBAC
+model User {
+  id            String   @id @default(uuid())
+  name          String
+  email         String   @unique
+  password      String
+  role          String   // SUPER_ADMIN, AGENCY_ADMIN, STAFF, CLIENT
+  tenantId      String?  // NULL for SUPER_ADMIN
+  agency        Agency?  @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  client        Client?  // A client login user maps to a Client record (1-to-1)
+  activityLogs  ActivityLog[]
+}
+
+// Clients managed by agencies
+model Client {
+  id            String   @id @default(uuid())
+  name          String
+  email         String
+  phone         String?
+  companyName   String?
+  address       String?
+  tenantId      String
+  agency        Agency   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
+  // Login credentials for client dashboard (optional)
+  userId        String?  @unique
+  user          User?    @relation(fields: [userId], references: [id])
+
+  services      Service[]
+  payments      Payment[]
+  invoices      Invoice[]
+  supportTickets SupportTicket[]
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+}
+
+// Service Categories (Hosting, Domain, SSL, Workspace, etc.)
+model ServiceCategory {
+  id        String    @id @default(uuid())
+  name      String
+  tenantId  String
+  agency    Agency    @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  services  Service[]
+  createdAt DateTime  @default(now())
+}
+
+// Service definitions with billing details
+model Service {
+  id                 String           @id @default(uuid())
+  name               String
+  description        String?
+  amount             Float
+  billingCycle       String           // MONTHLY, QUARTERLY, HALF_YEARLY, YEARLY, CUSTOM
+  customDurationDays Int?             // used if billingCycle is CUSTOM
+  startDate          DateTime
+  expiryDate         DateTime
+  status             String           // ACTIVE, INACTIVE, SUSPENDED
+  paymentStatus      String           // PAID, UNPAID, OVERDUE
+  reminderSettings   String           @default("30,15,7,1") // comma-separated days
+  clientId           String
+  client             Client           @relation(fields: [clientId], references: [id], onDelete: Cascade)
+  tenantId           String
+  agency             Agency           @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  categoryId         String?
+  category           ServiceCategory? @relation(fields: [categoryId], references: [id], onDelete: SetNull)
+
+  payments           Payment[]
+  invoices           Invoice[]
+  reminders          Reminder[]
+  createdAt          DateTime         @default(now())
+  updatedAt          DateTime         @updatedAt
+}
+
+// Manual payments records
+model Payment {
+  id               String    @id @default(uuid())
+  amount           Float
+  status           String    @default("PENDING_APPROVAL") // PENDING_APPROVAL, APPROVED, REJECTED
+  referenceNumber  String?   // UPI transaction ID or Bank ref
+  paymentDate      DateTime  @default(now())
+  paymentMethod    String    @default("UPI") // UPI, Bank Transfer, WhatsApp
+  serviceId        String
+  service          Service   @relation(fields: [serviceId], references: [id], onDelete: Cascade)
+  clientId         String
+  client           Client    @relation(fields: [clientId], references: [id], onDelete: Cascade)
+  tenantId         String
+  agency           Agency    @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  verifiedByUserId String?
+  createdAt        DateTime  @default(now())
+  updatedAt        DateTime  @updatedAt
+}
+
+// PDF/GST invoices generated
+model Invoice {
+  id            String   @id @default(uuid())
+  invoiceNumber String
+  amount        Float
+  taxAmount     Float    // GST amount
+  totalAmount   Float
+  status        String   // PAID, UNPAID, VOID
+  dueDate       DateTime
+  serviceId     String?
+  service       Service? @relation(fields: [serviceId], references: [id], onDelete: SetNull)
+  clientId      String
+  client        Client   @relation(fields: [clientId], references: [id], onDelete: Cascade)
+  tenantId      String
+  agency        Agency   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  pdfUrl        String?
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+}
+
+// Automation tracking reminders
+model Reminder {
+  id        String    @id @default(uuid())
+  serviceId String
+  service   Service   @relation(fields: [serviceId], references: [id], onDelete: Cascade)
+  type      String    // DAYS_30, DAYS_15, DAYS_7, DAYS_1, OVERDUE
+  status    String    @default("PENDING") // PENDING, SENT, FAILED
+  sentAt    DateTime?
+  channel   String    // EMAIL, WHATSAPP, IN_APP
+  tenantId  String
+  agency    Agency    @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  createdAt DateTime  @default(now())
+}
+
+// Support Tickets
+model SupportTicket {
+  id               String    @id @default(uuid())
+  subject          String
+  description      String
+  status           String    @default("OPEN") // OPEN, IN_PROGRESS, RESOLVED, CLOSED
+  priority         String    @default("MEDIUM") // LOW, MEDIUM, HIGH
+  clientId         String
+  client           Client    @relation(fields: [clientId], references: [id], onDelete: Cascade)
+  tenantId         String
+  agency           Agency    @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  assignedToUserId String?
+  createdAt        DateTime  @default(now())
+  updatedAt        DateTime  @updatedAt
+}
+
+// Activity Logs
+model ActivityLog {
+  id        String   @id @default(uuid())
+  action    String
+  details   String?
+  userId    String?
+  user      User?    @relation(fields: [userId], references: [id], onDelete: SetNull)
+  tenantId  String?
+  agency    Agency?  @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  ipAddress String?
+  createdAt DateTime @default(now())
+}
